@@ -1,8 +1,11 @@
 from __future__ import annotations
 from dataclasses import dataclass
+
+import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from .terrain import generate_reference_and_limits
+from terrain import generate_reference_and_limits
+
 
 class Submarine:
     def __init__(self):
@@ -61,6 +64,12 @@ class Trajectory:
         plt.plot(mission.reference, 'r', linestyle='--', label='Reference')
         plt.legend(loc='upper right')
         plt.show()
+    def compute_percent_error(self, reference: np.ndarray):
+        actual_depth = self.position[:, 1]  # extract the depth from the position array
+        epsilon = 1e-6  # small constant to avoid division by zero
+        percent_errors = np.abs(reference - actual_depth) / (np.abs(reference) + epsilon) * 100
+        mean_percent_error = np.mean(percent_errors)
+        return mean_percent_error
 
 @dataclass
 class Mission:
@@ -75,8 +84,11 @@ class Mission:
 
     @classmethod
     def from_csv(cls, file_name: str):
-        # You are required to implement this method
-        pass
+        data = pd.read_csv(file_name)
+        reference = data['reference'].values
+        cave_height = data['cave_height'].values
+        cave_depth = data['cave_depth'].values
+        return cls(reference, cave_height, cave_depth) 
 
 
 class ClosedLoop:
@@ -98,6 +110,8 @@ class ClosedLoop:
             positions[t] = self.plant.get_position()
             observation_t = self.plant.get_depth()
             # Call your controller here
+            error_t = mission.reference[t] - observation_t
+            actions[t] = self.controller.compute_control(error_t)
             self.plant.transition(actions[t], disturbances[t])
 
         return Trajectory(positions)
